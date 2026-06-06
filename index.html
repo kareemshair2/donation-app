@@ -112,5 +112,11 @@
 </div>
 
 <script src="app.js"></script>
+<script>
+  // ربط الزرار الثابت (اللي خارج الفورم) بتسليم الفورم
+  document.getElementById('stickySubmitBtn').addEventListener('click', function() {
+    document.getElementById('donationForm').requestSubmit();
+  });
+</script>
 </body>
 </html>
