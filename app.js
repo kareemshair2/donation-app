@@ -1,12 +1,7 @@
-// ============================================================
-// Donation Collection App - Frontend Logic
-// ============================================================
-
-// --- Config ---
-// استبدل الرابط أدناه برابط Web App من Google Apps Script بعد النشر
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz4MN5m6qPY3tq7_gVqfDmVTN2BF6rK9Pnhrt5xMxrE174fKDI5scKFqdOvCvHwhyyR/exec';
+const CACHE_KEY = 'donation_data';
+const CACHE_DURATION = 10 * 60 * 1000; // 10 دقايق
 
-// --- DOM refs ---
 const form = document.getElementById('donationForm');
 const dateInput = document.getElementById('date');
 const centerSelect = document.getElementById('center');
@@ -25,102 +20,78 @@ const errorMsg = document.getElementById('errorMessage');
 const successOverlay = document.getElementById('successOverlay');
 const newSubmissionBtn = document.getElementById('newSubmission');
 
-let centersData = [];
-let volunteersData = [];
-let typesData = [];
+let allVolunteers = [];
 let selectedImageBase64 = null;
 
-// ============================================================
-// Initialize
-// ============================================================
 function init() {
-  const today = new Date().toISOString().split('T')[0];
-  dateInput.value = today;
-  dateInput.max = today;
-  fetchCenters();
-  fetchDonationTypes();
+  dateInput.value = new Date().toISOString().split('T')[0];
+  dateInput.max = dateInput.value;
   attachEvents();
+  loadData();
 }
 
-// ============================================================
-// API calls
-// ============================================================
-async function apiGet(params) {
-  const url = APPS_SCRIPT_URL + '?' + new URLSearchParams(params).toString();
-  const res = await fetch(url);
-  return res.json();
+function loadData() {
+  const cached = getCache();
+  if (cached) {
+    renderAll(cached);
+    fetchFreshData();
+  } else {
+    fetchFreshData();
+  }
+}
+
+function getCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (Date.now() - parsed.ts > CACHE_DURATION) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return parsed.data;
+  } catch (_) { return null; }
+}
+
+function setCache(data) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch (_) {}
+}
+
+function renderAll(data) {
+  if (data.centers) renderCenters(data.centers);
+  if (data.donationTypes) renderDonationTypes(data.donationTypes);
+  if (data.volunteers) allVolunteers = data.volunteers;
+}
+
+async function fetchFreshData() {
+  centerLoader.style.display = 'inline-block';
+  typeLoader.style.display = 'inline-block';
+  try {
+    const res = await fetch(APPS_SCRIPT_URL + '?action=getAllData');
+    const result = await res.json();
+    if (result.success) {
+      setCache(result);
+      renderAll(result);
+    }
+  } catch (_) {
+    if (!getCache()) showError('تعذر تحميل البيانات. تأكد من اتصال الإنترنت.');
+  } finally {
+    centerLoader.style.display = 'none';
+    typeLoader.style.display = 'none';
+  }
 }
 
 async function apiPost(data) {
   await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    mode: 'no-cors',
+    method: 'POST', mode: 'no-cors',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
   });
   return { success: true };
 }
 
-// ============================================================
-// Fetch data from Google Sheets
-// ============================================================
-async function fetchCenters() {
-  centerLoader.style.display = 'inline-block';
-  try {
-    const result = await apiGet({ action: 'getCenters' });
-    if (result.success) {
-      centersData = result.data;
-      renderCenters(result.data);
-    }
-  } catch (e) {
-    showError('تعذر تحميل المراكز. تحقق من اتصال الإنترنت.');
-  } finally {
-    centerLoader.style.display = 'none';
-  }
-}
-
-async function fetchDonationTypes() {
-  typeLoader.style.display = 'inline-block';
-  try {
-    const result = await apiGet({ action: 'getDonationTypes' });
-    if (result.success) {
-      typesData = result.data;
-      renderDonationTypes(result.data);
-    }
-  } catch (_) {} finally {
-    typeLoader.style.display = 'none';
-  }
-}
-
-async function fetchVolunteers(centerId) {
-  if (!centerId) {
-    volunteerSelect.innerHTML = '<option value="">اختر المركز أولاً</option>';
-    volunteerSelect.disabled = true;
-    volunteersData = [];
-    return;
-  }
-  volunteerLoader.style.display = 'inline-block';
-  volunteerSelect.disabled = true;
-  volunteerSelect.innerHTML = '<option value="">جاري التحميل...</option>';
-  try {
-    const result = await apiGet({ action: 'getVolunteers', centerId });
-    if (result.success) {
-      volunteersData = result.data;
-      renderVolunteers(result.data);
-      volunteerSelect.disabled = false;
-    } else {
-      volunteerSelect.innerHTML = '<option value="">لا يوجد متطوعون</option>';
-    }
-  } catch (_) {
-    volunteerSelect.innerHTML = '<option value="">خطأ في التحميل</option>';
-  } finally {
-    volunteerLoader.style.display = 'none';
-  }
-}
-
-// ============================================================
-// Render helpers
-// ============================================================
 function renderCenters(centers) {
   centerSelect.innerHTML = '<option value="">اختر المركز</option>';
   centers.forEach(c => {
@@ -131,9 +102,9 @@ function renderCenters(centers) {
   });
 }
 
-function renderVolunteers(volunteers) {
+function renderVolunteers(list) {
   volunteerSelect.innerHTML = '<option value="">اختر المتطوع</option>';
-  volunteers.forEach(v => {
+  list.forEach(v => {
     const opt = document.createElement('option');
     opt.value = v.id;
     opt.textContent = v.name + (v.phone ? ' (' + v.phone + ')' : '');
@@ -151,9 +122,17 @@ function renderDonationTypes(types) {
   });
 }
 
-// ============================================================
-// Image handling
-// ============================================================
+function filterVolunteers(centerId) {
+  if (!centerId || !allVolunteers.length) {
+    volunteerSelect.innerHTML = '<option value="">اختر المركز أولاً</option>';
+    volunteerSelect.disabled = true;
+    return;
+  }
+  const filtered = allVolunteers.filter(v => String(v.centerId) === String(centerId));
+  renderVolunteers(filtered);
+  volunteerSelect.disabled = false;
+}
+
 function handleImageSelect(file) {
   if (!file) { clearImage(); return; }
   const reader = new FileReader();
@@ -174,11 +153,8 @@ function clearImage() {
   previewImg.src = '';
 }
 
-// ============================================================
-// Validation
-// ============================================================
 function validateForm() {
-  const fields = [
+  const checks = [
     { el: dateInput, name: 'التاريخ' },
     { el: centerSelect, name: 'المركز' },
     { el: volunteerSelect, name: 'المتطوع' },
@@ -186,84 +162,57 @@ function validateForm() {
     { el: valueInput, name: 'القيمة' },
     { el: typeSelect, name: 'نوع التبرع' }
   ];
-  for (const f of fields) {
-    if (!f.el.value || f.el.value === '') {
-      showError('الرجاء إدخال "' + f.name + '"');
-      f.el.focus();
-      return false;
-    }
+  for (const c of checks) {
+    if (!c.el.value) { showError('الرجاء إدخال "' + c.name + '"'); c.el.focus(); return false; }
   }
   if (referenceInput.value.trim().length < 3) {
-    showError('الرقم المرجعي يجب أن يكون 3 أحرف على الأقل');
-    referenceInput.focus();
-    return false;
+    showError('الرقم المرجعي يجب أن يكون 3 أحرف على الأقل'); referenceInput.focus(); return false;
   }
-  const val = parseFloat(valueInput.value);
-  if (isNaN(val) || val <= 0) {
-    showError('الرجاء إدخال قيمة صحيحة أكبر من صفر');
-    valueInput.focus();
-    return false;
+  if (parseFloat(valueInput.value) <= 0) {
+    showError('الرجاء إدخال قيمة صحيحة أكبر من صفر'); valueInput.focus(); return false;
   }
   return true;
 }
 
-// ============================================================
-// Submit
-// ============================================================
 async function handleSubmit(e) {
   e.preventDefault();
   hideError();
   if (!validateForm()) return;
   setLoading(true);
-
-  const payload = {
-    action: 'submit',
-    date: dateInput.value,
-    center: centerSelect.options[centerSelect.selectedIndex].text,
-    volunteer: volunteerSelect.options[volunteerSelect.selectedIndex].text,
-    receiptImage: selectedImageBase64 || '',
-    referenceNumber: referenceInput.value.trim(),
-    value: valueInput.value,
-    donationType: typeSelect.options[typeSelect.selectedIndex].text
-  };
-
   try {
-    const result = await apiPost(payload);
-    if (result && result.success === false) {
-      showError(result.error || 'فشل الحفظ');
-      return;
-    }
+    await apiPost({
+      action: 'submit',
+      date: dateInput.value,
+      center: centerSelect.options[centerSelect.selectedIndex].text,
+      volunteer: volunteerSelect.options[volunteerSelect.selectedIndex].text,
+      receiptImage: selectedImageBase64 || '',
+      referenceNumber: referenceInput.value.trim(),
+      value: valueInput.value,
+      donationType: typeSelect.options[typeSelect.selectedIndex].text
+    });
+    localStorage.removeItem(CACHE_KEY);
     showSuccess();
     resetForm();
-  } catch (e) {
+  } catch (_) {
     showError('فشل إرسال البيانات. حاول مرة أخرى.');
   } finally {
     setLoading(false);
   }
 }
 
-// ============================================================
-// UI state
-// ============================================================
 function setLoading(loading) {
   document.querySelectorAll('.btn-text').forEach(el => el.style.display = loading ? 'none' : 'inline');
   document.querySelectorAll('.btn-loader').forEach(el => el.style.display = loading ? 'inline' : 'none');
   document.querySelectorAll('.btn-submit').forEach(btn => btn.disabled = loading);
-  form.querySelectorAll('input, select, textarea').forEach(el => el.disabled = loading);
+  form.querySelectorAll('input, select').forEach(el => el.disabled = loading);
 }
 
-function showError(msg) {
-  errorMsg.textContent = msg;
-  errorMsg.style.display = 'block';
-}
-
+function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
 function hideError() { errorMsg.style.display = 'none'; }
-
 function showSuccess() { successOverlay.style.display = 'flex'; }
 
 function resetForm() {
-  const today = new Date().toISOString().split('T')[0];
-  dateInput.value = today;
+  dateInput.value = new Date().toISOString().split('T')[0];
   centerSelect.value = '';
   volunteerSelect.innerHTML = '<option value="">اختر المركز أولاً</option>';
   volunteerSelect.disabled = true;
@@ -273,36 +222,19 @@ function resetForm() {
   clearImage();
 }
 
-// ============================================================
-// Events
-// ============================================================
 function attachEvents() {
   form.addEventListener('submit', handleSubmit);
-
-  newSubmissionBtn.addEventListener('click', function() {
-    successOverlay.style.display = 'none';
+  document.getElementById('stickySubmitBtn').addEventListener('click', function() {
+    form.requestSubmit();
   });
-
-  centerSelect.addEventListener('change', function() {
-    fetchVolunteers(this.value);
-  });
-
-  receiptInput.addEventListener('change', function() {
-    handleImageSelect(this.files[0]);
-  });
-
-  removeImageBtn.addEventListener('click', function(e) {
-    e.stopPropagation();
-    clearImage();
-  });
-
+  newSubmissionBtn.addEventListener('click', function() { successOverlay.style.display = 'none'; });
+  centerSelect.addEventListener('change', function() { filterVolunteers(this.value); });
+  receiptInput.addEventListener('change', function() { handleImageSelect(this.files[0]); });
+  removeImageBtn.addEventListener('click', function(e) { e.stopPropagation(); clearImage(); });
   form.querySelectorAll('input, select').forEach(el => {
     el.addEventListener('change', hideError);
     el.addEventListener('input', hideError);
   });
 }
 
-// ============================================================
-// Start
-// ============================================================
 document.addEventListener('DOMContentLoaded', init);

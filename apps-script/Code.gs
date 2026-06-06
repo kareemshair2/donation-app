@@ -23,6 +23,9 @@ function doGet(e) {
       case 'getDonationTypes':
         result = getDonationTypes();
         break;
+      case 'getAllData':
+        result = getAllData();
+        break;
       default:
         result = { success: false, error: 'Unknown action' };
     }
@@ -31,6 +34,7 @@ function doGet(e) {
   }
   return buildResponse(result);
 }
+
 
 function doPost(e) {
   try {
@@ -86,6 +90,24 @@ function getDonationTypes() {
   const rows = getSheet('DonationTypes').getDataRange().getValues();
   rows.shift();
   return { success: true, data: rows.map(r => ({ id: r[0], name: r[1] })) };
+}
+
+function getAllData() {
+  return {
+    success: true,
+    centers: getCenters().data,
+    volunteers: getVolunteersAll().data,
+    donationTypes: getDonationTypes().data
+  };
+}
+
+function getVolunteersAll() {
+  const rows = getSheet('Volunteers').getDataRange().getValues();
+  rows.shift();
+  return {
+    success: true,
+    data: rows.map(r => ({ id: r[0], name: r[1], centerId: r[2], phone: r[3] }))
+  };
 }
 
 function getOrCreateFolder(name) {
