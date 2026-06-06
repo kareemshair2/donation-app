@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1a5c3a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>تسجيل التبرعات</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <header class="app-header">
+    <h1>تسجيل التبرعات</h1>
+    <p class="header-sub">محافظة المنوفية</p>
+  </header>
+
+  <form id="donationForm" class="donation-form" novalidate>
+
+    <!-- 1. التاريخ -->
+    <div class="form-group">
+      <label for="date">التاريخ</label>
+      <input type="date" id="date" required>
+    </div>
+
+    <!-- 2. المركز -->
+    <div class="form-group">
+      <label for="center">المركز</label>
+      <select id="center" required>
+        <option value="">اختر المركز</option>
+      </select>
+      <div class="loader" id="centerLoader"></div>
+    </div>
+
+    <!-- 3. المتطوع -->
+    <div class="form-group">
+      <label for="volunteer">المتطوع</label>
+      <select id="volunteer" required disabled>
+        <option value="">اختر المركز أولاً</option>
+      </select>
+      <div class="loader" id="volunteerLoader" style="display:none;"></div>
+    </div>
+
+    <!-- 4. صورة الإيصال -->
+    <div class="form-group">
+      <label for="receiptImage">صورة الإيصال</label>
+      <div class="image-upload" id="imageUploadBox">
+        <input type="file" id="receiptImage" accept="image/*" capture="environment">
+        <div class="upload-placeholder">
+          <span class="upload-icon">📷</span>
+          <span>اضغط لتصوير الإيصال أو اختيار صورة</span>
+        </div>
+        <div class="upload-preview" id="uploadPreview" style="display:none;">
+          <img id="previewImg" alt="معاينة الإيصال">
+          <button type="button" class="remove-image" id="removeImage">✕</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. الرقم المرجعي -->
+    <div class="form-group">
+      <label for="referenceNumber">الرقم المرجعي</label>
+      <input type="text" id="referenceNumber" placeholder="مثال: REF-2024-001" required>
+    </div>
+
+    <!-- 6. القيمة -->
+    <div class="form-group">
+      <label for="value">القيمة (ج.م)</label>
+      <input type="number" id="value" placeholder="أدخل المبلغ" min="0" step="0.01">
+    </div>
+
+    <!-- 7. نوع التبرع -->
+    <div class="form-group">
+      <label for="donationType">نوع التبرع</label>
+      <select id="donationType" required>
+        <option value="">اختر النوع</option>
+      </select>
+      <div class="loader" id="typeLoader"></div>
+    </div>
+
+    <!-- رسالة الخطأ -->
+    <div class="error-message" id="errorMessage" style="display:none;"></div>
+
+    <!-- Submit - مكرر: واحد داخل الـ flow للتنسيق -->
+    <div class="form-actions">
+      <button type="submit" class="btn-submit" id="submitBtn">
+        <span class="btn-text">تسجيل التبرع</span>
+        <span class="btn-loader" style="display:none;">جاري الحفظ...</span>
+      </button>
+    </div>
+
+  </form>
+
+  <!-- رسالة النجاح -->
+  <div class="success-overlay" id="successOverlay" style="display:none;">
+    <div class="success-card">
+      <div class="success-icon">✓</div>
+      <h2>تم التسجيل بنجاح!</h2>
+      <p id="successMessage">تم حفظ التبرع في النظام</p>
+      <button class="btn-new" id="newSubmission">تسجيل تبرع جديد</button>
+    </div>
+  </div>
+</div>
+
+<!-- زر Submit ثابت في الأسفل -->
+<div class="sticky-bar">
+  <button type="submit" class="btn-submit btn-sticky" id="stickySubmitBtn">
+    <span class="btn-text">تسجيل التبرع</span>
+    <span class="btn-loader" style="display:none;">جاري الحفظ...</span>
+  </button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
