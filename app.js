@@ -52,24 +52,13 @@ async function apiGet(params) {
 }
 
 async function apiPost(data) {
-  // Try normal CORS POST first; fallback to no-cors if it fails
-  try {
-    const res = await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return await res.json();
-  } catch (_) {
-    // Fallback: no-cors (won't read response, but data still saves)
-    await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return { success: true };
-  }
+  await fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  });
+  return { success: true };
 }
 
 // ============================================================
