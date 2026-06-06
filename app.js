@@ -24,10 +24,20 @@ let allVolunteers = [];
 let selectedImageBase64 = null;
 
 function init() {
+  initTheme();
   dateInput.value = new Date().toISOString().split('T')[0];
   dateInput.max = dateInput.value;
   attachEvents();
   loadData();
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    document.documentElement.setAttribute('data-theme', saved);
+  } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
 }
 
 function loadData() {
