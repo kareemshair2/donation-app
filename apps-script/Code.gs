@@ -36,18 +36,6 @@ function doGet(e) {
 }
 
 
-function uploadImage(base64, fileName) {
-  if (!base64) return '';
-  try {
-    const parts = base64.split(',');
-    const mime = parts[0].includes('png') ? 'image/png' : 'image/jpeg';
-    const blob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mime, fileName);
-    const file = getOrCreateFolder('DonationReceipts').createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return file.getUrl();
-  } catch (_) { return ''; }
-}
-
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -56,22 +44,27 @@ function doPost(e) {
       const rows = sheet.getDataRange().getValues();
       let nextId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
       const timestamp = new Date().toISOString();
-      var folder = getOrCreateFolder('DonationReceipts');
+      const folder = getOrCreateFolder('DonationReceipts');
 
-      data.entries.forEach(function(entry) {
-        var imageUrl = '';
-        if (entry.receiptImage) {
+      for (let i = 0; i < data.entries.length; i++) {
+        const entry = data.entries[i];
+        let imageUrl = '';
+
+        if (entry.receiptImage && entry.receiptImage.length > 50) {
           try {
-            var parts = entry.receiptImage.split(',');
-            var mime = parts[0].indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
-            var blob = Utilities.newBlob(
-              Utilities.base64Decode(parts[1]), mime,
+            const parts = entry.receiptImage.split(',');
+            const rawData = parts.length > 1 ? parts[1] : parts[0];
+            const mime = entry.receiptImage.indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
+            const blob = Utilities.newBlob(
+              Utilities.base64Decode(rawData), mime,
               'receipt_' + entry.referenceNumber + '_' + new Date().getTime()
             );
-            var file = folder.createFile(blob);
+            const file = folder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             imageUrl = file.getUrl();
-          } catch (_) {}
+          } catch (e) {
+            imageUrl = 'ERROR: ' + e.toString().substring(0, 100);
+          }
         }
 
         sheet.appendRow([
@@ -79,7 +72,7 @@ function doPost(e) {
           entry.volunteer, imageUrl, entry.referenceNumber || '',
           entry.value, entry.donationType, ''
         ]);
-      });
+      }
 
       return buildResponse({ success: true, message: 'تم حفظ ' + data.entries.length + ' تبرع بنجاح ✓', count: data.entries.length });
     }
