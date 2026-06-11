@@ -36,33 +36,47 @@ function doGet(e) {
 }
 
 
+function uploadImage(base64, fileName) {
+  if (!base64) return '';
+  try {
+    const parts = base64.split(',');
+    const mime = parts[0].includes('png') ? 'image/png' : 'image/jpeg';
+    const blob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mime, fileName);
+    const file = getOrCreateFolder('DonationReceipts').createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return file.getUrl();
+  } catch (_) { return ''; }
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     if (data.action === 'submitBatch' && data.entries) {
-      let imageUrl = '';
-      if (data.receiptImage) {
-        const parts = data.receiptImage.split(',');
-        const mime = parts[0].includes('png') ? 'image/png' : 'image/jpeg';
-        const blob = Utilities.newBlob(
-          Utilities.base64Decode(parts[1]), mime,
-          'receipt_' + data.referenceNumber + '_' + new Date().getTime()
-        );
-        const folder = getOrCreateFolder('DonationReceipts');
-        const file = folder.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-        imageUrl = file.getUrl();
-      }
-
       const sheet = getSheet('Submissions');
       const rows = sheet.getDataRange().getValues();
       let nextId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
       const timestamp = new Date().toISOString();
+      var folder = getOrCreateFolder('DonationReceipts');
 
       data.entries.forEach(function(entry) {
+        var imageUrl = '';
+        if (entry.receiptImage) {
+          try {
+            var parts = entry.receiptImage.split(',');
+            var mime = parts[0].indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
+            var blob = Utilities.newBlob(
+              Utilities.base64Decode(parts[1]), mime,
+              'receipt_' + entry.referenceNumber + '_' + new Date().getTime()
+            );
+            var file = folder.createFile(blob);
+            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            imageUrl = file.getUrl();
+          } catch (_) {}
+        }
+
         sheet.appendRow([
           nextId++, timestamp, data.date, data.center,
-          entry.volunteer, imageUrl, entry.referenceNumber || data.referenceNumber || '',
+          entry.volunteer, imageUrl, entry.referenceNumber || '',
           entry.value, entry.donationType, ''
         ]);
       });

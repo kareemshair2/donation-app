@@ -6,10 +6,6 @@ const form = document.getElementById('donationForm');
 const dateInput = document.getElementById('date');
 const centerSelect = document.getElementById('center');
 const centerLoader = document.getElementById('centerLoader');
-const receiptInput = document.getElementById('receiptImage');
-const uploadPreview = document.getElementById('uploadPreview');
-const previewImg = document.getElementById('previewImg');
-const removeImageBtn = document.getElementById('removeImage');
 const errorMsg = document.getElementById('errorMessage');
 const successOverlay = document.getElementById('successOverlay');
 const newSubmissionBtn = document.getElementById('newSubmission');
@@ -18,7 +14,6 @@ const addEntryBtn = document.getElementById('addEntryBtn');
 
 let allVolunteers = [];
 let allTypes = [];
-let selectedImageBase64 = null;
 let entryCount = 0;
 
 function init() {
@@ -103,26 +98,40 @@ function addEntry(data) {
   div.innerHTML = `
     <div class="entry-header">
       <span class="entry-num">تبرع #${id}</span>
-      <button type="button" class="btn-remove-entry" data-id="${id}">✕</button>
+      <button type="button" class="btn-remove-entry">✕</button>
     </div>
     <div class="entry-fields">
       <div class="entry-field">
-        <label>المتطوع</label>
+        <label>المتطوع *</label>
         <select class="entry-volunteer" required>
-          <option value="">اختر المتطوع</option>
+          <option value="">اختر المركز أولاً</option>
         </select>
       </div>
       <div class="entry-field">
-        <label>الرقم المرجعي</label>
+        <label>صورة الإيصال *</label>
+        <div class="entry-image-upload">
+          <input type="file" class="entry-receipt" accept="image/*" capture="environment" required>
+          <div class="entry-img-placeholder">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>تصوير</span>
+          </div>
+          <div class="entry-img-preview" style="display:none;">
+            <img class="entry-preview-img" alt="">
+            <button type="button" class="entry-remove-img">✕</button>
+          </div>
+        </div>
+      </div>
+      <div class="entry-field">
+        <label>الرقم المرجعي *</label>
         <input type="text" class="entry-ref" placeholder="مثال: REF-001" required>
       </div>
       <div class="entry-row">
         <div class="entry-field flex-2">
-          <label>القيمة (ج.م)</label>
+          <label>القيمة (ج.م) *</label>
           <input type="number" class="entry-value" placeholder="0" min="0" step="0.01" required>
         </div>
         <div class="entry-field flex-1">
-          <label>النوع / النية</label>
+          <label>النوع / النية *</label>
           <select class="entry-type" required>
             <option value="">اختر</option>
           </select>
@@ -131,10 +140,11 @@ function addEntry(data) {
     </div>
   `;
 
+  // Volunteer dropdown
   const volSelect = div.querySelector('.entry-volunteer');
-  const centerId = centerSelect.value;
-  if (centerId && allVolunteers.length) {
-    const filtered = allVolunteers.filter(v => String(v.centerId) === String(centerId));
+  const cid = centerSelect.value;
+  if (cid && allVolunteers.length) {
+    const filtered = allVolunteers.filter(v => String(v.centerId) === String(cid));
     volSelect.innerHTML = '<option value="">اختر المتطوع</option>';
     filtered.forEach(v => {
       const opt = document.createElement('option');
@@ -143,11 +153,9 @@ function addEntry(data) {
       volSelect.appendChild(opt);
     });
     volSelect.disabled = false;
-  } else {
-    volSelect.innerHTML = '<option value="">اختر المركز أولاً</option>';
-    volSelect.disabled = true;
   }
 
+  // Type dropdown
   const typeSelect = div.querySelector('.entry-type');
   typeSelect.innerHTML = '<option value="">اختر</option>';
   allTypes.forEach(t => {
@@ -157,16 +165,44 @@ function addEntry(data) {
     typeSelect.appendChild(opt);
   });
 
-  if (data) {
-    if (data.volunteerId) volSelect.value = data.volunteerId;
-    if (data.ref) div.querySelector('.entry-ref').value = data.ref;
-    if (data.value) div.querySelector('.entry-value').value = data.value;
-    if (data.typeId) typeSelect.value = data.typeId;
-  }
+  // Image handling for this entry
+  let imageBase64 = null;
+  const fileInput = div.querySelector('.entry-receipt');
+  const imgPreview = div.querySelector('.entry-img-preview');
+  const previewImg = div.querySelector('.entry-preview-img');
+  const placeholder = div.querySelector('.entry-img-placeholder');
+  const removeBtn = div.querySelector('.entry-remove-img');
 
+  fileInput.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      imageBase64 = e.target.result;
+      previewImg.src = imageBase64;
+      imgPreview.style.display = 'flex';
+      placeholder.style.display = 'none';
+      fileInput.removeAttribute('required');
+    };
+    reader.readAsDataURL(file);
+  });
+
+  removeBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    imageBase64 = null;
+    fileInput.value = '';
+    imgPreview.style.display = 'none';
+    placeholder.style.display = 'flex';
+    fileInput.setAttribute('required', '');
+  });
+
+  // Remove entry
   div.querySelector('.btn-remove-entry').addEventListener('click', function() {
     div.remove();
   });
+
+  // Store image data in the card element
+  div._getImage = function() { return imageBase64; };
 
   entriesContainer.appendChild(div);
 }
@@ -174,6 +210,7 @@ function addEntry(data) {
 function getEntryData() {
   const entries = [];
   entriesContainer.querySelectorAll('.entry-card').forEach(card => {
+    if (!card._getImage) return;
     const vol = card.querySelector('.entry-volunteer');
     const ref = card.querySelector('.entry-ref');
     const val = card.querySelector('.entry-value');
@@ -181,6 +218,7 @@ function getEntryData() {
     entries.push({
       volunteer: vol.options[vol.selectedIndex] ? vol.options[vol.selectedIndex].text : '',
       volunteerId: vol.value,
+      receiptImage: card._getImage() || '',
       referenceNumber: ref ? ref.value.trim() : '',
       value: val ? val.value : '',
       donationType: typ.options[typ.selectedIndex] ? typ.options[typ.selectedIndex].text : ''
@@ -189,36 +227,11 @@ function getEntryData() {
   return entries;
 }
 
-// ============ Image ============
-
-function handleImageSelect(file) {
-  if (!file) { clearImage(); return; }
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    selectedImageBase64 = e.target.result;
-    previewImg.src = selectedImageBase64;
-    uploadPreview.style.display = 'flex';
-    document.querySelector('.upload-placeholder').style.display = 'none';
-    receiptInput.removeAttribute('required');
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearImage() {
-  selectedImageBase64 = null;
-  receiptInput.value = '';
-  uploadPreview.style.display = 'none';
-  document.querySelector('.upload-placeholder').style.display = 'flex';
-  previewImg.src = '';
-  receiptInput.setAttribute('required', '');
-}
-
 // ============ Validation ============
 
 function validateForm() {
-  if (!dateInput.value) { showError('الرجاء إدخال التاريخ'); dateInput.focus(); return false; }
-  if (!centerSelect.value) { showError('الرجاء اختيار المركز'); centerSelect.focus(); return false; }
-  if (!selectedImageBase64) { showError('الرجاء تصوير أو رفع صورة الإيصال'); return false; }
+  if (!dateInput.value) { showError('الرجاء إدخال التاريخ'); return false; }
+  if (!centerSelect.value) { showError('الرجاء اختيار المركز'); return false; }
 
   const entries = getEntryData();
   if (!entries.length) { showError('أضف تبرع واحد على الأقل'); return false; }
@@ -226,7 +239,8 @@ function validateForm() {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     if (!e.volunteerId) { showError('اختر متطوع في التبرع #' + (i + 1)); return false; }
-    if (!e.referenceNumber || e.referenceNumber.length < 3) { showError('الرقم المرجعي 3 أحرف على الأقل في التبرع #' + (i + 1)); return false; }
+    if (!e.receiptImage) { showError('صورة الإيصال مطلوبة في التبرع #' + (i + 1)); return false; }
+    if (!e.referenceNumber || e.referenceNumber.length < 3) { showError('الرقم المرجعي 3 أحرف في التبرع #' + (i + 1)); return false; }
     if (!e.value || parseFloat(e.value) <= 0) { showError('أدخل قيمة صحيحة في التبرع #' + (i + 1)); return false; }
     if (!e.donationType) { showError('اختر نوع التبرع #' + (i + 1)); return false; }
   }
@@ -246,7 +260,6 @@ async function handleSubmit(e) {
       action: 'submitBatch',
       date: dateInput.value,
       center: centerSelect.options[centerSelect.selectedIndex].text,
-      receiptImage: selectedImageBase64,
       entries: getEntryData()
     });
     localStorage.removeItem(CACHE_KEY);
@@ -283,12 +296,12 @@ function attachEvents() {
   newSubmissionBtn.addEventListener('click', function() { location.reload(); });
 
   centerSelect.addEventListener('change', function() {
-    const centerId = this.value;
+    const cid = this.value;
     entriesContainer.querySelectorAll('.entry-volunteer').forEach(sel => {
       sel.innerHTML = '<option value="">اختر المركز أولاً</option>';
       sel.disabled = true;
-      if (centerId && allVolunteers.length) {
-        const filtered = allVolunteers.filter(v => String(v.centerId) === String(centerId));
+      if (cid && allVolunteers.length) {
+        const filtered = allVolunteers.filter(v => String(v.centerId) === String(cid));
         sel.innerHTML = '<option value="">اختر المتطوع</option>';
         filtered.forEach(v => {
           const opt = document.createElement('option');
@@ -305,9 +318,6 @@ function attachEvents() {
     if (!centerSelect.value) { showError('اختر المركز أولاً'); return; }
     addEntry();
   });
-
-  receiptInput.addEventListener('change', function() { handleImageSelect(this.files[0]); });
-  removeImageBtn.addEventListener('click', function(e) { e.stopPropagation(); clearImage(); });
 
   form.querySelectorAll('input, select').forEach(el => {
     el.addEventListener('change', hideError);
