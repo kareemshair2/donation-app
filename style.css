@@ -246,6 +246,40 @@ select::-ms-expand { display: none; }
   justify-content: center;
 }
 
+/* ============ Receipt block inside entries ============ */
+.receipt-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.receipt-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-right: 2px;
+}
+
+.receipt-block .image-upload {
+  min-height: 90px;
+  padding: 14px;
+  margin: 0;
+}
+
+.receipt-block .upload-placeholder {
+  font-size: 0.8rem;
+}
+
+.image-upload.required {
+  border-color: var(--orange);
+  border-style: solid;
+  background: linear-gradient(135deg, var(--white), #FFF8E1);
+}
+
+[data-theme="dark"] .image-upload.required {
+  background: linear-gradient(135deg, var(--white), #1A1200);
+}
+
 /* ============ Entries section ============ */
 .entries-section {
   display: flex;

@@ -10,7 +10,6 @@ const receiptInput = document.getElementById('receiptImage');
 const uploadPreview = document.getElementById('uploadPreview');
 const previewImg = document.getElementById('previewImg');
 const removeImageBtn = document.getElementById('removeImage');
-const referenceInput = document.getElementById('referenceNumber');
 const errorMsg = document.getElementById('errorMessage');
 const successOverlay = document.getElementById('successOverlay');
 const newSubmissionBtn = document.getElementById('newSubmission');
@@ -59,7 +58,7 @@ function setCache(data) {
 
 function renderAll(data) {
   if (data.centers) renderCenters(data.centers);
-  if (data.donationTypes) { allTypes = data.donationTypes; }
+  if (data.donationTypes) allTypes = data.donationTypes;
   if (data.volunteers) allVolunteers = data.volunteers;
 }
 
@@ -93,7 +92,7 @@ function renderCenters(centers) {
   });
 }
 
-// ============ Entries management ============
+// ============ Entries ============
 
 function addEntry(data) {
   entryCount++;
@@ -103,15 +102,19 @@ function addEntry(data) {
   div.dataset.id = id;
   div.innerHTML = `
     <div class="entry-header">
-      <span class="entry-num">#${id}</span>
+      <span class="entry-num">تبرع #${id}</span>
       <button type="button" class="btn-remove-entry" data-id="${id}">✕</button>
     </div>
     <div class="entry-fields">
       <div class="entry-field">
         <label>المتطوع</label>
         <select class="entry-volunteer" required>
-          <option value="">اختر</option>
+          <option value="">اختر المتطوع</option>
         </select>
+      </div>
+      <div class="entry-field">
+        <label>الرقم المرجعي</label>
+        <input type="text" class="entry-ref" placeholder="مثال: REF-001" required>
       </div>
       <div class="entry-row">
         <div class="entry-field flex-2">
@@ -119,20 +122,15 @@ function addEntry(data) {
           <input type="number" class="entry-value" placeholder="0" min="0" step="0.01" required>
         </div>
         <div class="entry-field flex-1">
-          <label>النوع</label>
+          <label>النوع / النية</label>
           <select class="entry-type" required>
             <option value="">اختر</option>
           </select>
         </div>
       </div>
-      <div class="entry-field">
-        <label>النية / البيان</label>
-        <input type="text" class="entry-note" placeholder="اختياري">
-      </div>
     </div>
   `;
 
-  // Fill volunteer dropdown filtered by current center
   const volSelect = div.querySelector('.entry-volunteer');
   const centerId = centerSelect.value;
   if (centerId && allVolunteers.length) {
@@ -150,7 +148,6 @@ function addEntry(data) {
     volSelect.disabled = true;
   }
 
-  // Fill type dropdown
   const typeSelect = div.querySelector('.entry-type');
   typeSelect.innerHTML = '<option value="">اختر</option>';
   allTypes.forEach(t => {
@@ -160,15 +157,13 @@ function addEntry(data) {
     typeSelect.appendChild(opt);
   });
 
-  // Load data if editing
   if (data) {
     if (data.volunteerId) volSelect.value = data.volunteerId;
+    if (data.ref) div.querySelector('.entry-ref').value = data.ref;
     if (data.value) div.querySelector('.entry-value').value = data.value;
     if (data.typeId) typeSelect.value = data.typeId;
-    if (data.note) div.querySelector('.entry-note').value = data.note;
   }
 
-  // Remove handler
   div.querySelector('.btn-remove-entry').addEventListener('click', function() {
     div.remove();
   });
@@ -177,19 +172,18 @@ function addEntry(data) {
 }
 
 function getEntryData() {
-  const cards = entriesContainer.querySelectorAll('.entry-card');
   const entries = [];
-  cards.forEach(card => {
+  entriesContainer.querySelectorAll('.entry-card').forEach(card => {
     const vol = card.querySelector('.entry-volunteer');
+    const ref = card.querySelector('.entry-ref');
     const val = card.querySelector('.entry-value');
     const typ = card.querySelector('.entry-type');
-    const note = card.querySelector('.entry-note');
     entries.push({
       volunteer: vol.options[vol.selectedIndex] ? vol.options[vol.selectedIndex].text : '',
       volunteerId: vol.value,
-      value: val.value,
-      donationType: typ.options[typ.selectedIndex] ? typ.options[typ.selectedIndex].text : '',
-      note: note.value
+      referenceNumber: ref ? ref.value.trim() : '',
+      value: val ? val.value : '',
+      donationType: typ.options[typ.selectedIndex] ? typ.options[typ.selectedIndex].text : ''
     });
   });
   return entries;
@@ -205,6 +199,7 @@ function handleImageSelect(file) {
     previewImg.src = selectedImageBase64;
     uploadPreview.style.display = 'flex';
     document.querySelector('.upload-placeholder').style.display = 'none';
+    receiptInput.removeAttribute('required');
   };
   reader.readAsDataURL(file);
 }
@@ -215,6 +210,7 @@ function clearImage() {
   uploadPreview.style.display = 'none';
   document.querySelector('.upload-placeholder').style.display = 'flex';
   previewImg.src = '';
+  receiptInput.setAttribute('required', '');
 }
 
 // ============ Validation ============
@@ -222,7 +218,7 @@ function clearImage() {
 function validateForm() {
   if (!dateInput.value) { showError('الرجاء إدخال التاريخ'); dateInput.focus(); return false; }
   if (!centerSelect.value) { showError('الرجاء اختيار المركز'); centerSelect.focus(); return false; }
-  if (referenceInput.value.trim().length < 3) { showError('الرقم المرجعي 3 أحرف على الأقل'); referenceInput.focus(); return false; }
+  if (!selectedImageBase64) { showError('الرجاء تصوير أو رفع صورة الإيصال'); return false; }
 
   const entries = getEntryData();
   if (!entries.length) { showError('أضف تبرع واحد على الأقل'); return false; }
@@ -230,10 +226,10 @@ function validateForm() {
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
     if (!e.volunteerId) { showError('اختر متطوع في التبرع #' + (i + 1)); return false; }
+    if (!e.referenceNumber || e.referenceNumber.length < 3) { showError('الرقم المرجعي 3 أحرف على الأقل في التبرع #' + (i + 1)); return false; }
     if (!e.value || parseFloat(e.value) <= 0) { showError('أدخل قيمة صحيحة في التبرع #' + (i + 1)); return false; }
     if (!e.donationType) { showError('اختر نوع التبرع #' + (i + 1)); return false; }
   }
-
   return true;
 }
 
@@ -245,16 +241,13 @@ async function handleSubmit(e) {
   if (!validateForm()) return;
   setLoading(true);
 
-  const entries = getEntryData();
-
   try {
     await apiPost({
       action: 'submitBatch',
       date: dateInput.value,
       center: centerSelect.options[centerSelect.selectedIndex].text,
-      receiptImage: selectedImageBase64 || '',
-      referenceNumber: referenceInput.value.trim(),
-      entries: entries
+      receiptImage: selectedImageBase64,
+      entries: getEntryData()
     });
     localStorage.removeItem(CACHE_KEY);
     showSuccess();
@@ -271,12 +264,11 @@ function setLoading(loading) {
   document.querySelectorAll('.btn-text').forEach(el => el.style.display = loading ? 'none' : 'inline');
   document.querySelectorAll('.btn-loader').forEach(el => el.style.display = loading ? 'inline' : 'none');
   document.querySelectorAll('.btn-submit').forEach(btn => btn.disabled = loading);
-  form.querySelectorAll('input, select, textarea').forEach(el => el.disabled = loading);
+  form.querySelectorAll('input, select').forEach(el => el.disabled = loading);
 }
 
 function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
 function hideError() { errorMsg.style.display = 'none'; }
-
 function showSuccess() { successOverlay.style.display = 'flex'; }
 
 // ============ Events ============
@@ -288,13 +280,9 @@ function attachEvents() {
     form.requestSubmit();
   });
 
-  // New submission → reload page
-  newSubmissionBtn.addEventListener('click', function() {
-    location.reload();
-  });
+  newSubmissionBtn.addEventListener('click', function() { location.reload(); });
 
   centerSelect.addEventListener('change', function() {
-    // Update all entry volunteer dropdowns with filtered list
     const centerId = this.value;
     entriesContainer.querySelectorAll('.entry-volunteer').forEach(sel => {
       sel.innerHTML = '<option value="">اختر المركز أولاً</option>';
@@ -326,13 +314,12 @@ function attachEvents() {
     el.addEventListener('input', hideError);
   });
 
-  // Add first entry on load when center changes
-  const centerObserver = new MutationObserver(function() {
+  const observer = new MutationObserver(function() {
     if (centerSelect.options.length > 1 && !entriesContainer.children.length) {
       addEntry();
     }
   });
-  centerObserver.observe(centerSelect, { childList: true, subtree: true });
+  observer.observe(centerSelect, { childList: true, subtree: true });
 }
 
 document.addEventListener('DOMContentLoaded', init);

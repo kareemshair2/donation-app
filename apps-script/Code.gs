@@ -62,8 +62,8 @@ function doPost(e) {
       data.entries.forEach(function(entry) {
         sheet.appendRow([
           nextId++, timestamp, data.date, data.center,
-          entry.volunteer, imageUrl, data.referenceNumber,
-          entry.value, entry.donationType, entry.note || ''
+          entry.volunteer, imageUrl, entry.referenceNumber || data.referenceNumber || '',
+          entry.value, entry.donationType, ''
         ]);
       });
 
