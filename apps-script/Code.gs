@@ -39,14 +39,13 @@ function doGet(e) {
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    if (data.action === 'submit') {
+    if (data.action === 'submitBatch' && data.entries) {
       let imageUrl = '';
       if (data.receiptImage) {
         const parts = data.receiptImage.split(',');
         const mime = parts[0].includes('png') ? 'image/png' : 'image/jpeg';
         const blob = Utilities.newBlob(
-          Utilities.base64Decode(parts[1]),
-          mime,
+          Utilities.base64Decode(parts[1]), mime,
           'receipt_' + data.referenceNumber + '_' + new Date().getTime()
         );
         const folder = getOrCreateFolder('DonationReceipts');
@@ -57,12 +56,18 @@ function doPost(e) {
 
       const sheet = getSheet('Submissions');
       const rows = sheet.getDataRange().getValues();
-      const newId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
-      sheet.appendRow([
-        newId, new Date().toISOString(), data.date, data.center,
-        data.volunteer, imageUrl, data.referenceNumber, data.value, data.donationType
-      ]);
-      return buildResponse({ success: true, message: 'تم حفظ التبرع بنجاح ✓', id: newId });
+      let nextId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
+      const timestamp = new Date().toISOString();
+
+      data.entries.forEach(function(entry) {
+        sheet.appendRow([
+          nextId++, timestamp, data.date, data.center,
+          entry.volunteer, imageUrl, data.referenceNumber,
+          entry.value, entry.donationType, entry.note || ''
+        ]);
+      });
+
+      return buildResponse({ success: true, message: 'تم حفظ ' + data.entries.length + ' تبرع بنجاح ✓', count: data.entries.length });
     }
     return buildResponse({ success: false, error: 'Unknown action' });
   } catch (err) {
