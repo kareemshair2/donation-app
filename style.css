@@ -113,10 +113,44 @@ body {
   font-size: 1.25rem;
   font-weight: 700;
   letter-spacing: 0.3px;
+  transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+}
+
+.app-header.scrolled h1 {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  pointer-events: none;
 }
 
 .header-sub {
   font-size: 0.78rem;
+  transition: opacity 0.3s ease, max-height 0.3s ease, margin 0.3s ease;
+}
+
+.app-header.scrolled .header-sub {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Brand badge hide on scroll */
+.app-header.scrolled .brand-badge {
+  opacity: 0;
+  max-height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Orange line hide on scroll */
+.app-header.scrolled::after {
+  opacity: 0;
+  margin: 0 auto;
+}
   opacity: 0.75;
   margin-top: 2px;
 }
