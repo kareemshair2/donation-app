@@ -600,13 +600,12 @@ select::-ms-expand { display: none; }
   }
 
   .app-logo {
-    display: none;
+    display: block;
+    width: min(80%, 380px);
   }
 
   .app-icon {
-    display: flex;
-    width: 52px;
-    height: 52px;
+    display: none;
   }
 
   .donation-form {
