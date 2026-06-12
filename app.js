@@ -409,3 +409,15 @@ function attachEvents() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// Hide logo on scroll
+let scrollTimer;
+window.addEventListener('scroll', function() {
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+  if (window.scrollY > 30) {
+    header.classList.add('scrolled');
+  } else {
+    header.classList.remove('scrolled');
+  }
+}, { passive: true });
