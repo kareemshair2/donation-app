@@ -39,6 +39,17 @@ function doGet(e) {
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
+    if (data.action === 'addVolunteer') {
+      const sheet = getSheet('Volunteers');
+      const rows = sheet.getDataRange().getValues();
+      const newId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
+      sheet.appendRow([newId, data.name, data.centerId, data.phone || '']);
+      return buildResponse({
+        success: true,
+        volunteer: { id: newId, name: data.name, centerId: data.centerId, phone: data.phone || '' }
+      });
+    }
+
     if (data.action === 'submitBatch' && data.entries) {
       const sheet = getSheet('Submissions');
       const rows = sheet.getDataRange().getValues();

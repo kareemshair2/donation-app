@@ -87,7 +87,117 @@ function renderCenters(centers) {
   });
 }
 
+// ============ New Volunteer Modal ============
+
+function showNewVolunteerModal(selectEl) {
+  const cid = centerSelect.value;
+  const centerName = centerSelect.options[centerSelect.selectedIndex].text;
+
+  if (!cid) { showError('اختر المركز أولاً'); return; }
+
+  hideError();
+  const overlay = document.createElement('div');
+  overlay.className = 'success-overlay';
+  overlay.style.display = 'flex';
+  overlay.innerHTML = `
+    <div class="modal-card" style="background:var(--white);border-radius:16px;padding:32px 24px;max-width:340px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,0.15);animation:popIn 0.3s ease-out;border:1px solid var(--border);text-align:right;">
+      <h3 style="font-size:1.1rem;margin-bottom:4px;color:var(--text);">متطوع جديد</h3>
+      <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:18px;">${centerName}</p>
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);">الاسم الثلاثي *</label>
+          <input type="text" id="newVolName" placeholder="مثال: أحمد محمد علي" style="padding:12px;font-size:0.95rem;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;width:100%;">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);">رقم التواصل</label>
+          <input type="text" id="newVolPhone" placeholder="مثال: 01000000000" style="padding:12px;font-size:0.95rem;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;width:100%;direction:ltr;text-align:left;">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:20px;">
+        <button type="button" id="cancelNewVol" style="flex:1;padding:12px;font-size:0.9rem;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer;font-family:var(--font);">إلغاء</button>
+        <button type="button" id="saveNewVol" style="flex:1;padding:12px;font-size:0.9rem;font-weight:700;border:none;border-radius:8px;background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;cursor:pointer;font-family:var(--font);box-shadow:0 4px 16px var(--orange-glow);">حفظ</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  overlay.querySelector('#cancelNewVol').addEventListener('click', function() {
+    overlay.remove();
+    selectEl.value = '';
+  });
+
+  overlay.querySelector('#saveNewVol').addEventListener('click', async function() {
+    const name = overlay.querySelector('#newVolName').value.trim();
+    const phone = overlay.querySelector('#newVolPhone').value.trim();
+    if (!name || name.split(' ').filter(Boolean).length < 2) {
+      alert('الرجاء إدخال الاسم الثلاثي على الأقل');
+      return;
+    }
+
+    this.disabled = true;
+    this.textContent = 'جاري الحفظ...';
+
+    try {
+      await apiPost({
+        action: 'addVolunteer',
+        name: name,
+        centerId: cid,
+        phone: phone
+      });
+
+      const newVol = { id: Date.now(), name: name, centerId: cid, phone: phone };
+      allVolunteers.push(newVol);
+      localStorage.removeItem(CACHE_KEY);
+
+      // Update all volunteer dropdowns in entries
+      document.querySelectorAll('.entry-volunteer').forEach(function(sel) {
+        const currentCid = centerSelect.value;
+        if (String(newVol.centerId) === String(currentCid)) {
+          const opt = document.createElement('option');
+          opt.value = newVol.id;
+          opt.textContent = newVol.name;
+          const addOpt = sel.querySelector('option[value="add-new"]');
+          if (addOpt) sel.insertBefore(opt, addOpt);
+          else sel.appendChild(opt);
+        }
+      });
+
+      selectEl.value = newVol.id;
+      overlay.remove();
+    } catch (_) {
+      alert('فشل إضافة المتطوع. حاول مرة أخرى.');
+      this.disabled = false;
+      this.textContent = 'حفظ';
+    }
+  });
+
+  overlay.addEventListener('click', function(e) {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+
 // ============ Entries ============
+
+function populateVolunteerDropdown(sel, centerId) {
+  sel.innerHTML = '<option value="">اختر المتطوع</option>';
+  if (centerId && allVolunteers.length) {
+    const filtered = allVolunteers.filter(v => String(v.centerId) === String(centerId));
+    filtered.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.id;
+      opt.textContent = v.name;
+      sel.appendChild(opt);
+    });
+    const addOpt = document.createElement('option');
+    addOpt.value = 'add-new';
+    addOpt.textContent = '➕ متطوع جديد';
+    sel.appendChild(addOpt);
+    sel.disabled = false;
+  } else {
+    sel.disabled = true;
+  }
+}
 
 function addEntry(data) {
   entryCount++;
@@ -103,9 +213,7 @@ function addEntry(data) {
     <div class="entry-fields">
       <div class="entry-field">
         <label>المتطوع *</label>
-        <select class="entry-volunteer" required>
-          <option value="">اختر المركز أولاً</option>
-        </select>
+        <select class="entry-volunteer" required></select>
       </div>
       <div class="entry-field">
         <label>صورة الإيصال *</label>
@@ -140,22 +248,16 @@ function addEntry(data) {
     </div>
   `;
 
-  // Volunteer dropdown
   const volSelect = div.querySelector('.entry-volunteer');
-  const cid = centerSelect.value;
-  if (cid && allVolunteers.length) {
-    const filtered = allVolunteers.filter(v => String(v.centerId) === String(cid));
-    volSelect.innerHTML = '<option value="">اختر المتطوع</option>';
-    filtered.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.id;
-      opt.textContent = v.name;
-      volSelect.appendChild(opt);
-    });
-    volSelect.disabled = false;
-  }
+  populateVolunteerDropdown(volSelect, centerSelect.value);
 
-  // Type dropdown
+  // Handle "➕ متطوع جديد" selection
+  volSelect.addEventListener('change', function() {
+    if (this.value === 'add-new') {
+      showNewVolunteerModal(this);
+    }
+  });
+
   const typeSelect = div.querySelector('.entry-type');
   typeSelect.innerHTML = '<option value="">اختر</option>';
   allTypes.forEach(t => {
@@ -165,7 +267,9 @@ function addEntry(data) {
     typeSelect.appendChild(opt);
   });
 
-  // Image handling for this entry
+  if (data && data.typeId) typeSelect.value = data.typeId;
+
+  // Image handling
   let imageBase64 = null;
   const fileInput = div.querySelector('.entry-receipt');
   const imgPreview = div.querySelector('.entry-img-preview');
@@ -196,12 +300,7 @@ function addEntry(data) {
     fileInput.setAttribute('required', '');
   });
 
-  // Remove entry
-  div.querySelector('.btn-remove-entry').addEventListener('click', function() {
-    div.remove();
-  });
-
-  // Store image data in the card element
+  div.querySelector('.btn-remove-entry').addEventListener('click', function() { div.remove(); });
   div._getImage = function() { return imageBase64; };
 
   entriesContainer.appendChild(div);
@@ -232,13 +331,11 @@ function getEntryData() {
 function validateForm() {
   if (!dateInput.value) { showError('الرجاء إدخال التاريخ'); return false; }
   if (!centerSelect.value) { showError('الرجاء اختيار المركز'); return false; }
-
   const entries = getEntryData();
   if (!entries.length) { showError('أضف تبرع واحد على الأقل'); return false; }
-
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    if (!e.volunteerId) { showError('اختر متطوع في التبرع #' + (i + 1)); return false; }
+    if (!e.volunteerId || e.volunteerId === 'add-new') { showError('اختر متطوع في التبرع #' + (i + 1)); return false; }
     if (!e.receiptImage) { showError('صورة الإيصال مطلوبة في التبرع #' + (i + 1)); return false; }
     if (!e.referenceNumber || e.referenceNumber.length < 3) { showError('الرقم المرجعي 3 أحرف في التبرع #' + (i + 1)); return false; }
     if (!e.value || parseFloat(e.value) <= 0) { showError('أدخل قيمة صحيحة في التبرع #' + (i + 1)); return false; }
@@ -254,7 +351,6 @@ async function handleSubmit(e) {
   hideError();
   if (!validateForm()) return;
   setLoading(true);
-
   try {
     await apiPost({
       action: 'submitBatch',
@@ -266,9 +362,7 @@ async function handleSubmit(e) {
     showSuccess();
   } catch (_) {
     showError('فشل إرسال البيانات. حاول مرة أخرى.');
-  } finally {
-    setLoading(false);
-  }
+  } finally { setLoading(false); }
 }
 
 // ============ UI ============
@@ -288,29 +382,13 @@ function showSuccess() { successOverlay.style.display = 'flex'; }
 
 function attachEvents() {
   form.addEventListener('submit', handleSubmit);
-
-  document.getElementById('stickySubmitBtn').addEventListener('click', function() {
-    form.requestSubmit();
-  });
-
+  document.getElementById('stickySubmitBtn').addEventListener('click', function() { form.requestSubmit(); });
   newSubmissionBtn.addEventListener('click', function() { location.reload(); });
 
   centerSelect.addEventListener('change', function() {
     const cid = this.value;
-    entriesContainer.querySelectorAll('.entry-volunteer').forEach(sel => {
-      sel.innerHTML = '<option value="">اختر المركز أولاً</option>';
-      sel.disabled = true;
-      if (cid && allVolunteers.length) {
-        const filtered = allVolunteers.filter(v => String(v.centerId) === String(cid));
-        sel.innerHTML = '<option value="">اختر المتطوع</option>';
-        filtered.forEach(v => {
-          const opt = document.createElement('option');
-          opt.value = v.id;
-          opt.textContent = v.name;
-          sel.appendChild(opt);
-        });
-        sel.disabled = false;
-      }
+    document.querySelectorAll('.entry-volunteer').forEach(function(sel) {
+      populateVolunteerDropdown(sel, cid);
     });
   });
 
@@ -325,9 +403,7 @@ function attachEvents() {
   });
 
   const observer = new MutationObserver(function() {
-    if (centerSelect.options.length > 1 && !entriesContainer.children.length) {
-      addEntry();
-    }
+    if (centerSelect.options.length > 1 && !entriesContainer.children.length) addEntry();
   });
   observer.observe(centerSelect, { childList: true, subtree: true });
 }
