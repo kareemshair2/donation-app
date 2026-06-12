@@ -601,7 +601,7 @@ select::-ms-expand { display: none; }
 
   .app-logo {
     display: block;
-    width: min(80%, 380px);
+    width: min(85%, 420px);
   }
 
   .app-icon {
