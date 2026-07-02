@@ -31,53 +31,34 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
 
     if (data.action === 'submitBatch' && data.entries) {
-      removeDuplicateIds(); // auto-clean duplicates before submit
+      removeDuplicateIds();
       const sheet = getSheet('Submissions');
       const rows = sheet.getDataRange().getValues();
       let nextId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
       const timestamp = new Date().toISOString();
       const parentFolder = getOrCreateFolder('DonationReceipts');
 
-      // Build set of existing (center + referenceNumber) to detect duplicates
-      var existing = {};
-      for (var r = 1; r < rows.length; r++) {
-        var row = rows[r];
-        var key = (row[4] || '') + '|' + (row[10] || '');
-        existing[key] = true;
-      }
-
-      var saved = 0;
-      var skipped = 0;
-
-      for (var i = 0; i < data.entries.length; i++) {
-        var entry = data.entries[i];
-        var dupKey = (data.center || '') + '|' + (entry.referenceNumber || '');
-
-        if (existing[dupKey]) {
-          skipped++;
-          continue;
-        }
-        existing[dupKey] = true;
-
-        var imageUrl = '';
+      for (let i = 0; i < data.entries.length; i++) {
+        let entry = data.entries[i];
+        let imageUrl = '';
 
         if (entry.receiptImage && entry.receiptImage.length > 50) {
           try {
-            var centerName = (data.center || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
-            var centerFolder = getOrCreateSubFolder(parentFolder, centerName);
+            const centerName = (data.center || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
+            const centerFolder = getOrCreateSubFolder(parentFolder, centerName);
 
-            var parts = entry.receiptImage.split(',');
-            var rawData = parts.length > 1 ? parts[1] : parts[0];
-            var mime = entry.receiptImage.indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
-            var ext = entry.receiptImage.indexOf('png') > -1 ? 'png' : 'jpg';
+            const parts = entry.receiptImage.split(',');
+            const rawData = parts.length > 1 ? parts[1] : parts[0];
+            const mime = entry.receiptImage.indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
+            const ext = entry.receiptImage.indexOf('png') > -1 ? 'png' : 'jpg';
 
-            var ref = (entry.referenceNumber || '').replace(/[\/\\:*?"<>|]/g, '_');
-            var val = (entry.value || '').replace(/[\/\\:*?"<>|]/g, '_');
-            var status = (entry.statusCode || '').replace(/[\/\\:*?"<>|]/g, '_');
-            var fileName = status ? ref + '-' + val + '-' + status + '.' + ext : ref + '-' + val + '.' + ext;
+            const ref = (entry.referenceNumber || '').replace(/[\/\\:*?"<>|]/g, '_');
+            const val = (entry.value || '').replace(/[\/\\:*?"<>|]/g, '_');
+            const status = (entry.statusCode || '').replace(/[\/\\:*?"<>|]/g, '_');
+            const fileName = status ? ref + '-' + val + '-' + status + '.' + ext : ref + '-' + val + '.' + ext;
 
-            var blob = Utilities.newBlob(Utilities.base64Decode(rawData), mime, fileName);
-            var file = centerFolder.createFile(blob);
+            const blob = Utilities.newBlob(Utilities.base64Decode(rawData), mime, fileName);
+            const file = centerFolder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             imageUrl = file.getUrl();
           } catch (e) {
@@ -92,12 +73,9 @@ function doPost(e) {
           entry.referenceNumber || '', entry.value || '',
           imageUrl, entry.statusCode || '', ''
         ]);
-        saved++;
       }
 
-      var msg = saved > 0 ? 'تم حفظ ' + saved + ' تبرع بنجاح ✓' : 'لم يتم حفظ أي تبرع';
-      if (skipped > 0) msg += ' (' + skipped + ' مكرر تم تخطيه)';
-      return buildResponse({ success: saved > 0, message: msg, count: saved, skipped: skipped });
+      return buildResponse({ success: true, message: 'تم حفظ ' + data.entries.length + ' تبرع بنجاح ✓', count: data.entries.length });
     }
 
     return buildResponse({ success: false, error: 'Unknown action' });
@@ -172,13 +150,30 @@ function getOrCreateSubFolder(parent, name) {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('🧹 تنظيف')
-    .addItem('حذف تكرار ID في التسجيلات', 'removeDuplicateIds')
+    .addItem('حذف تكرار ID في التسجيلات', 'cleanDuplicatesMenu')
     .addToUi();
 }
 
 function removeDuplicateIds() {
   const sheet = getSheet('Submissions');
   if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return;
+  const seen = {};
+  const rowsToDelete = [];
+  for (let i = 1; i < data.length; i++) {
+    const id = data[i][0];
+    if (seen[id]) { rowsToDelete.push(i + 1); }
+    else { seen[id] = true; }
+  }
+  for (let j = rowsToDelete.length - 1; j >= 0; j--) {
+    sheet.deleteRow(rowsToDelete[j]);
+  }
+}
+
+function cleanDuplicatesMenu() {
+  const sheet = getSheet('Submissions');
+  if (!sheet) { SpreadsheetApp.getUi().alert('الشيت مش موجود'); return; }
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) { SpreadsheetApp.getUi().alert('لا توجد بيانات'); return; }
   const seen = {};
