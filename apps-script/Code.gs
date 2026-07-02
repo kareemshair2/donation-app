@@ -31,6 +31,7 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
 
     if (data.action === 'submitBatch' && data.entries) {
+      removeDuplicateIds(); // auto-clean duplicates before submit
       const sheet = getSheet('Submissions');
       const rows = sheet.getDataRange().getValues();
       let nextId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
@@ -166,4 +167,30 @@ function getOrCreateSubFolder(parent, name) {
     if (f.getName() === name) return f;
   }
   return parent.createFolder(name);
+}
+
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('🧹 تنظيف')
+    .addItem('حذف تكرار ID في التسجيلات', 'removeDuplicateIds')
+    .addToUi();
+}
+
+function removeDuplicateIds() {
+  const sheet = getSheet('Submissions');
+  if (!sheet) return;
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) { SpreadsheetApp.getUi().alert('لا توجد بيانات'); return; }
+  const seen = {};
+  const rowsToDelete = [];
+  for (let i = 1; i < data.length; i++) {
+    const id = data[i][0];
+    if (seen[id]) { rowsToDelete.push(i + 1); }
+    else { seen[id] = true; }
+  }
+  if (!rowsToDelete.length) { SpreadsheetApp.getUi().alert('لا توجد تكرارات'); return; }
+  for (let j = rowsToDelete.length - 1; j >= 0; j--) {
+    sheet.deleteRow(rowsToDelete[j]);
+  }
+  SpreadsheetApp.getUi().alert('تم حذف ' + rowsToDelete.length + ' صف مكرر');
 }
