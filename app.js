@@ -105,7 +105,7 @@ function renderCenters(centers) {
   centers.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c.id;
-    opt.textContent = c.name + ' - ' + c.area;
+    opt.textContent = c.name;
     centerSelect.appendChild(opt);
   });
 }
