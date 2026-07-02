@@ -358,7 +358,7 @@ function validateForm() {
     if (!e.donationType) { showError('اختر النية في التبرع #' + (i + 1)); return false; }
     if (!e.receiptType) { showError('اختر نوع الوصل في التبرع #' + (i + 1)); return false; }
     if (!e.receiptDate) { showError('أدخل تاريخ الإيصال في التبرع #' + (i + 1)); return false; }
-    if (!e.referenceNumber || e.referenceNumber.length < 3) { showError('الرقم المرجعي 3 أحرف في التبرع #' + (i + 1)); return false; }
+    if (!e.referenceNumber) { showError('أدخل الرقم المرجعي في التبرع #' + (i + 1)); return false; }
     if (!e.value || parseFloat(e.value) <= 0) { showError('أدخل مبلغ صحيح في التبرع #' + (i + 1)); return false; }
     if (!e.receiptImage) { showError('صورة الإيصال مطلوبة في التبرع #' + (i + 1)); return false; }
   }
