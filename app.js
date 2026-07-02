@@ -139,7 +139,6 @@ function addEntry(data) {
       <div class="entry-field">
         <label>المتطوع *</label>
         <input type="text" class="entry-vol-search" placeholder="ابحث بالاسم..." autocomplete="off">
-        <input type="hidden" class="entry-volunteer-id">
       </div>
       <div class="entry-vol-results" style="display:none;"></div>
       <div class="entry-field">
@@ -198,7 +197,6 @@ function addEntry(data) {
   `;
 
   const volSearch = div.querySelector('.entry-vol-search');
-  const volIdInput = div.querySelector('.entry-volunteer-id');
   const phoneInput = div.querySelector('.entry-phone');
   const resultsBox = div.querySelector('.entry-vol-results');
 
@@ -225,7 +223,7 @@ function addEntry(data) {
         item.textContent = v.name;
         item.addEventListener('click', function() {
           volSearch.value = v.name;
-          volIdInput.value = v.id;
+          volSearch.dataset.volId = v.id;
           phoneInput.value = v.phone || '';
           resultsBox.style.display = 'none';
         });
@@ -254,7 +252,7 @@ function addEntry(data) {
     const v = allVolunteers.find(x => String(x.id) === String(data.volId));
     if (v) {
       volSearch.value = v.name;
-      volIdInput.value = v.id;
+      volSearch.dataset.volId = v.id;
       phoneInput.value = v.phone || '';
     }
   }
@@ -323,7 +321,6 @@ function getEntryData() {
   entriesContainer.querySelectorAll('.entry-card').forEach(card => {
     if (!card._getImage) return;
     const volSearch = card.querySelector('.entry-vol-search');
-    const volIdInput = card.querySelector('.entry-volunteer-id');
     const phoneInput = card.querySelector('.entry-phone');
     const typ = card.querySelector('.entry-type');
     const recType = card.querySelector('.entry-receipt-type');
@@ -333,7 +330,7 @@ function getEntryData() {
     const status = card.querySelector('.entry-status');
     entries.push({
       volunteer: volSearch ? volSearch.value.trim() : '',
-      volunteerId: volIdInput ? volIdInput.value : '',
+      volunteerId: volSearch ? volSearch.dataset.volId || '' : '',
       phone: phoneInput ? phoneInput.value.trim() : '',
       donationType: typ && typ.selectedIndex > 0 ? typ.options[typ.selectedIndex].text : '',
       receiptType: recType && recType.selectedIndex > 0 ? recType.options[recType.selectedIndex].text : '',
@@ -413,9 +410,7 @@ function attachEvents() {
   centerSelect.addEventListener('change', function() {
     document.querySelectorAll('.entry-vol-search').forEach(function(inp) {
       inp.value = '';
-    });
-    document.querySelectorAll('.entry-volunteer-id').forEach(function(inp) {
-      inp.value = '';
+      delete inp.dataset.volId;
     });
     document.querySelectorAll('.entry-phone').forEach(function(inp) { inp.value = ''; });
   });
