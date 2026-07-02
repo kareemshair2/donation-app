@@ -4,6 +4,8 @@ const CACHE_DURATION = 10 * 60 * 1000;
 
 const form = document.getElementById('donationForm');
 const dateInput = document.getElementById('date');
+const campaignSelect = document.getElementById('campaign');
+const campaignLoader = document.getElementById('campaignLoader');
 const centerSelect = document.getElementById('center');
 const centerLoader = document.getElementById('centerLoader');
 const errorMsg = document.getElementById('errorMessage');
@@ -12,8 +14,11 @@ const newSubmissionBtn = document.getElementById('newSubmission');
 const entriesContainer = document.getElementById('entriesContainer');
 const addEntryBtn = document.getElementById('addEntryBtn');
 
+let allCampaigns = [];
+let allCenters = [];
 let allVolunteers = [];
-let allTypes = [];
+let allDonationTypes = [];
+let allReceiptTypes = [];
 let entryCount = 0;
 
 function init() {
@@ -52,12 +57,17 @@ function setCache(data) {
 }
 
 function renderAll(data) {
-  if (data.centers) renderCenters(data.centers);
-  if (data.donationTypes) allTypes = data.donationTypes;
+  if (data.campaigns) allCampaigns = data.campaigns;
+  if (data.centers) allCenters = data.centers;
   if (data.volunteers) allVolunteers = data.volunteers;
+  if (data.donationTypes) allDonationTypes = data.donationTypes;
+  if (data.receiptTypes) allReceiptTypes = data.receiptTypes;
+  renderCampaigns(allCampaigns);
+  renderCenters(allCenters);
 }
 
 async function fetchFreshData() {
+  campaignLoader.style.display = 'inline-block';
   centerLoader.style.display = 'inline-block';
   try {
     const res = await fetch(APPS_SCRIPT_URL + '?action=getAllData');
@@ -65,7 +75,10 @@ async function fetchFreshData() {
     if (result.success) { setCache(result); renderAll(result); }
   } catch (_) {
     if (!getCache()) showError('تعذر تحميل البيانات');
-  } finally { centerLoader.style.display = 'none'; }
+  } finally {
+    campaignLoader.style.display = 'none';
+    centerLoader.style.display = 'none';
+  }
 }
 
 async function apiPost(data) {
@@ -75,6 +88,16 @@ async function apiPost(data) {
     body: JSON.stringify(data)
   });
   return { success: true };
+}
+
+function renderCampaigns(campaigns) {
+  campaignSelect.innerHTML = '<option value="">اختر الحملة</option>';
+  campaigns.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    campaignSelect.appendChild(opt);
+  });
 }
 
 function renderCenters(centers) {
@@ -87,117 +110,36 @@ function renderCenters(centers) {
   });
 }
 
-// ============ New Volunteer Modal ============
+// ============ Volunteer Search & Dropdown ============
 
-function showNewVolunteerModal(selectEl) {
-  const cid = centerSelect.value;
-  const centerName = centerSelect.options[centerSelect.selectedIndex].text;
+function getFilteredVolunteers(centerId, query) {
+  let list = allVolunteers;
+  if (centerId) list = list.filter(v => String(v.centerId) === String(centerId));
+  if (query) {
+    const q = query.trim().toLowerCase();
+    list = list.filter(v => v.name.toLowerCase().includes(q));
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+}
 
-  if (!cid) { showError('اختر المركز أولاً'); return; }
-
-  hideError();
-  const overlay = document.createElement('div');
-  overlay.className = 'success-overlay';
-  overlay.style.display = 'flex';
-  overlay.innerHTML = `
-    <div class="modal-card" style="background:var(--white);border-radius:16px;padding:32px 24px;max-width:340px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,0.15);animation:popIn 0.3s ease-out;border:1px solid var(--border);text-align:right;">
-      <h3 style="font-size:1.1rem;margin-bottom:4px;color:var(--text);">متطوع جديد</h3>
-      <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:18px;">${centerName}</p>
-      <div style="display:flex;flex-direction:column;gap:12px;">
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);">الاسم الثلاثي *</label>
-          <input type="text" id="newVolName" placeholder="مثال: أحمد محمد علي" style="padding:12px;font-size:0.95rem;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;width:100%;">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <label style="font-size:0.78rem;font-weight:600;color:var(--text-secondary);">رقم التواصل</label>
-          <input type="text" id="newVolPhone" placeholder="مثال: 01000000000" style="padding:12px;font-size:0.95rem;border:1.5px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:var(--font);outline:none;width:100%;direction:ltr;text-align:left;">
-        </div>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:20px;">
-        <button type="button" id="cancelNewVol" style="flex:1;padding:12px;font-size:0.9rem;font-weight:600;border:1.5px solid var(--border);border-radius:8px;background:var(--white);color:var(--text);cursor:pointer;font-family:var(--font);">إلغاء</button>
-        <button type="button" id="saveNewVol" style="flex:1;padding:12px;font-size:0.9rem;font-weight:700;border:none;border-radius:8px;background:linear-gradient(135deg,var(--orange),var(--orange-light));color:white;cursor:pointer;font-family:var(--font);box-shadow:0 4px 16px var(--orange-glow);">حفظ</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(overlay);
-
-  overlay.querySelector('#cancelNewVol').addEventListener('click', function() {
-    overlay.remove();
-    selectEl.value = '';
+function rebuildVolunteerDropdown(selectEl, centerId, query) {
+  const filtered = getFilteredVolunteers(centerId, query);
+  const currentVal = selectEl.value;
+  selectEl.innerHTML = '<option value="">اختر المتطوع</option>';
+  filtered.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = v.name;
+    selectEl.appendChild(opt);
   });
-
-  overlay.querySelector('#saveNewVol').addEventListener('click', async function() {
-    const name = overlay.querySelector('#newVolName').value.trim();
-    const phone = overlay.querySelector('#newVolPhone').value.trim();
-    if (!name || name.split(' ').filter(Boolean).length < 2) {
-      alert('الرجاء إدخال الاسم الثلاثي على الأقل');
-      return;
-    }
-
-    this.disabled = true;
-    this.textContent = 'جاري الحفظ...';
-
-    try {
-      await apiPost({
-        action: 'addVolunteer',
-        name: name,
-        centerId: cid,
-        phone: phone
-      });
-
-      const newVol = { id: Date.now(), name: name, centerId: cid, phone: phone };
-      allVolunteers.push(newVol);
-      localStorage.removeItem(CACHE_KEY);
-
-      // Update all volunteer dropdowns in entries
-      document.querySelectorAll('.entry-volunteer').forEach(function(sel) {
-        const currentCid = centerSelect.value;
-        if (String(newVol.centerId) === String(currentCid)) {
-          const opt = document.createElement('option');
-          opt.value = newVol.id;
-          opt.textContent = newVol.name;
-          const addOpt = sel.querySelector('option[value="add-new"]');
-          if (addOpt) sel.insertBefore(opt, addOpt);
-          else sel.appendChild(opt);
-        }
-      });
-
-      selectEl.value = newVol.id;
-      overlay.remove();
-    } catch (_) {
-      alert('فشل إضافة المتطوع. حاول مرة أخرى.');
-      this.disabled = false;
-      this.textContent = 'حفظ';
-    }
-  });
-
-  overlay.addEventListener('click', function(e) {
-    if (e.target === overlay) overlay.remove();
-  });
+  selectEl.disabled = !centerId;
+  if (currentVal) {
+    const stillExists = filtered.some(v => String(v.id) === String(currentVal));
+    if (stillExists) selectEl.value = currentVal;
+  }
 }
 
 // ============ Entries ============
-
-function populateVolunteerDropdown(sel, centerId) {
-  sel.innerHTML = '<option value="">اختر المتطوع</option>';
-  if (centerId && allVolunteers.length) {
-    const filtered = allVolunteers.filter(v => String(v.centerId) === String(centerId));
-    filtered.forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.id;
-      opt.textContent = v.name;
-      sel.appendChild(opt);
-    });
-    const addOpt = document.createElement('option');
-    addOpt.value = 'add-new';
-    addOpt.textContent = '➕ متطوع جديد';
-    sel.appendChild(addOpt);
-    sel.disabled = false;
-  } else {
-    sel.disabled = true;
-  }
-}
 
 function addEntry(data) {
   entryCount++;
@@ -213,15 +155,55 @@ function addEntry(data) {
     <div class="entry-fields">
       <div class="entry-field">
         <label>المتطوع *</label>
-        <select class="entry-volunteer" required></select>
+        <input type="text" class="entry-vol-search" placeholder="ابحث بالاسم..." autocomplete="off">
+        <select class="entry-volunteer" required style="display:none;"></select>
+      </div>
+      <div class="entry-vol-results" style="display:none;"></div>
+      <div class="entry-field">
+        <label>رقم التليفون</label>
+        <input type="text" class="entry-phone" readonly dir="ltr" placeholder="يظهر تلقائي">
+      </div>
+      <div class="entry-row">
+        <div class="entry-field flex-1">
+          <label>النية *</label>
+          <select class="entry-type" required>
+            <option value="">اختر</option>
+          </select>
+        </div>
+        <div class="entry-field flex-1">
+          <label>نوع الوصل *</label>
+          <select class="entry-receipt-type" required>
+            <option value="">اختر</option>
+          </select>
+        </div>
+      </div>
+      <div class="entry-row">
+        <div class="entry-field flex-1">
+          <label>تاريخ الإيصال *</label>
+          <input type="date" class="entry-receipt-date" required>
+        </div>
+        <div class="entry-field flex-1">
+          <label>الرقم المرجعي *</label>
+          <input type="text" class="entry-ref" placeholder="REF-001" required>
+        </div>
+      </div>
+      <div class="entry-row">
+        <div class="entry-field flex-2">
+          <label>المبلغ (ج.م) *</label>
+          <input type="number" class="entry-value" placeholder="0" min="0" step="0.01" inputmode="numeric" required>
+        </div>
+        <div class="entry-field flex-1">
+          <label>كود الحالة</label>
+          <input type="text" class="entry-status" placeholder="اختياري">
+        </div>
       </div>
       <div class="entry-field">
         <label>صورة الإيصال *</label>
         <div class="entry-image-upload">
-          <input type="file" class="entry-receipt" accept="image/*" capture="environment" required>
+          <input type="file" class="entry-receipt" accept="image/*" required>
           <div class="entry-img-placeholder">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <span>تصوير</span>
+            <span>اختر صورة</span>
           </div>
           <div class="entry-img-preview" style="display:none;">
             <img class="entry-preview-img" alt="">
@@ -229,45 +211,70 @@ function addEntry(data) {
           </div>
         </div>
       </div>
-      <div class="entry-field">
-        <label>الرقم المرجعي *</label>
-        <input type="text" class="entry-ref" placeholder="مثال: REF-001" required>
-      </div>
-      <div class="entry-row">
-        <div class="entry-field flex-2">
-          <label>القيمة (ج.م) *</label>
-          <input type="number" class="entry-value" placeholder="0" min="0" step="0.01" required>
-        </div>
-        <div class="entry-field flex-1">
-          <label>النوع / النية *</label>
-          <select class="entry-type" required>
-            <option value="">اختر</option>
-          </select>
-        </div>
-      </div>
     </div>
   `;
 
+  const volSearch = div.querySelector('.entry-vol-search');
   const volSelect = div.querySelector('.entry-volunteer');
-  populateVolunteerDropdown(volSelect, centerSelect.value);
+  const phoneInput = div.querySelector('.entry-phone');
+  const resultsBox = div.querySelector('.entry-vol-results');
 
-  // Handle "➕ متطوع جديد" selection
-  volSelect.addEventListener('change', function() {
-    if (this.value === 'add-new') {
-      showNewVolunteerModal(this);
+  // Populate dropdowns
+  populateDonationTypes(div);
+  populateReceiptTypes(div);
+
+  // Set default receipt date
+  const recDate = div.querySelector('.entry-receipt-date');
+  recDate.value = new Date().toISOString().split('T')[0];
+
+  // Volunteer search: filter dropdown and show results box
+  volSearch.addEventListener('input', function() {
+    const q = this.value;
+    const cid = centerSelect.value;
+    const filtered = getFilteredVolunteers(cid, q);
+
+    if (q.length > 0 && filtered.length > 0) {
+      resultsBox.style.display = 'block';
+      resultsBox.innerHTML = '';
+      filtered.slice(0, 20).forEach(v => {
+        const item = document.createElement('div');
+        item.className = 'vol-result-item';
+        item.textContent = v.name;
+        item.addEventListener('click', function() {
+          volSearch.value = v.name;
+          volSelect.value = v.id;
+          phoneInput.value = v.phone || '';
+          resultsBox.style.display = 'none';
+        });
+        resultsBox.appendChild(item);
+      });
+    } else {
+      resultsBox.style.display = 'none';
     }
   });
 
-  const typeSelect = div.querySelector('.entry-type');
-  typeSelect.innerHTML = '<option value="">اختر</option>';
-  allTypes.forEach(t => {
-    const opt = document.createElement('option');
-    opt.value = t.id;
-    opt.textContent = t.name;
-    typeSelect.appendChild(opt);
+  volSearch.addEventListener('blur', function() {
+    setTimeout(function() { resultsBox.style.display = 'none'; }, 200);
   });
 
-  if (data && data.typeId) typeSelect.value = data.typeId;
+  volSearch.addEventListener('focus', function() {
+    const q = this.value;
+    const cid = centerSelect.value;
+    const filtered = getFilteredVolunteers(cid, q);
+    if (filtered.length > 0) {
+      resultsBox.style.display = 'block';
+    }
+  });
+
+  // If data pre-filled
+  if (data && data.volId) {
+    const v = allVolunteers.find(x => String(x.id) === String(data.volId));
+    if (v) {
+      volSearch.value = v.name;
+      volSelect.value = v.id;
+      phoneInput.value = v.phone || '';
+    }
+  }
 
   // Image handling
   let imageBase64 = null;
@@ -306,21 +313,52 @@ function addEntry(data) {
   entriesContainer.appendChild(div);
 }
 
+function populateDonationTypes(div) {
+  const sel = div.querySelector('.entry-type');
+  sel.innerHTML = '<option value="">اختر</option>';
+  allDonationTypes.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name;
+    sel.appendChild(opt);
+  });
+}
+
+function populateReceiptTypes(div) {
+  const sel = div.querySelector('.entry-receipt-type');
+  sel.innerHTML = '<option value="">اختر</option>';
+  allReceiptTypes.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name;
+    sel.appendChild(opt);
+  });
+}
+
 function getEntryData() {
   const entries = [];
   entriesContainer.querySelectorAll('.entry-card').forEach(card => {
     if (!card._getImage) return;
-    const vol = card.querySelector('.entry-volunteer');
+    const volSearch = card.querySelector('.entry-vol-search');
+    const volSelect = card.querySelector('.entry-volunteer');
+    const phoneInput = card.querySelector('.entry-phone');
+    const typ = card.querySelector('.entry-type');
+    const recType = card.querySelector('.entry-receipt-type');
+    const recDate = card.querySelector('.entry-receipt-date');
     const ref = card.querySelector('.entry-ref');
     const val = card.querySelector('.entry-value');
-    const typ = card.querySelector('.entry-type');
+    const status = card.querySelector('.entry-status');
     entries.push({
-      volunteer: vol.options[vol.selectedIndex] ? vol.options[vol.selectedIndex].text : '',
-      volunteerId: vol.value,
-      receiptImage: card._getImage() || '',
+      volunteer: volSearch ? volSearch.value.trim() : '',
+      volunteerId: volSelect ? volSelect.value : '',
+      phone: phoneInput ? phoneInput.value.trim() : '',
+      donationType: typ && typ.selectedIndex > 0 ? typ.options[typ.selectedIndex].text : '',
+      receiptType: recType && recType.selectedIndex > 0 ? recType.options[recType.selectedIndex].text : '',
+      receiptDate: recDate ? recDate.value : '',
       referenceNumber: ref ? ref.value.trim() : '',
       value: val ? val.value : '',
-      donationType: typ.options[typ.selectedIndex] ? typ.options[typ.selectedIndex].text : ''
+      receiptImage: card._getImage() || '',
+      statusCode: status ? status.value.trim() : ''
     });
   });
   return entries;
@@ -330,16 +368,19 @@ function getEntryData() {
 
 function validateForm() {
   if (!dateInput.value) { showError('الرجاء إدخال التاريخ'); return false; }
+  if (!campaignSelect.value) { showError('الرجاء اختيار الحملة'); return false; }
   if (!centerSelect.value) { showError('الرجاء اختيار المركز'); return false; }
   const entries = getEntryData();
   if (!entries.length) { showError('أضف تبرع واحد على الأقل'); return false; }
   for (let i = 0; i < entries.length; i++) {
     const e = entries[i];
-    if (!e.volunteerId || e.volunteerId === 'add-new') { showError('اختر متطوع في التبرع #' + (i + 1)); return false; }
-    if (!e.receiptImage) { showError('صورة الإيصال مطلوبة في التبرع #' + (i + 1)); return false; }
+    if (!e.volunteerId) { showError('اختر متطوع في التبرع #' + (i + 1)); return false; }
+    if (!e.donationType) { showError('اختر النية في التبرع #' + (i + 1)); return false; }
+    if (!e.receiptType) { showError('اختر نوع الوصل في التبرع #' + (i + 1)); return false; }
+    if (!e.receiptDate) { showError('أدخل تاريخ الإيصال في التبرع #' + (i + 1)); return false; }
     if (!e.referenceNumber || e.referenceNumber.length < 3) { showError('الرقم المرجعي 3 أحرف في التبرع #' + (i + 1)); return false; }
-    if (!e.value || parseFloat(e.value) <= 0) { showError('أدخل قيمة صحيحة في التبرع #' + (i + 1)); return false; }
-    if (!e.donationType) { showError('اختر نوع التبرع #' + (i + 1)); return false; }
+    if (!e.value || parseFloat(e.value) <= 0) { showError('أدخل مبلغ صحيح في التبرع #' + (i + 1)); return false; }
+    if (!e.receiptImage) { showError('صورة الإيصال مطلوبة في التبرع #' + (i + 1)); return false; }
   }
   return true;
 }
@@ -355,6 +396,7 @@ async function handleSubmit(e) {
     await apiPost({
       action: 'submitBatch',
       date: dateInput.value,
+      campaign: campaignSelect.options[campaignSelect.selectedIndex].text,
       center: centerSelect.options[centerSelect.selectedIndex].text,
       entries: getEntryData()
     });
@@ -386,10 +428,13 @@ function attachEvents() {
   newSubmissionBtn.addEventListener('click', function() { location.reload(); });
 
   centerSelect.addEventListener('change', function() {
-    const cid = this.value;
-    document.querySelectorAll('.entry-volunteer').forEach(function(sel) {
-      populateVolunteerDropdown(sel, cid);
+    document.querySelectorAll('.entry-vol-search').forEach(function(inp) {
+      inp.value = '';
     });
+    document.querySelectorAll('.entry-volunteer').forEach(function(sel) {
+      rebuildVolunteerDropdown(sel, centerSelect.value, '');
+    });
+    document.querySelectorAll('.entry-phone').forEach(function(inp) { inp.value = ''; });
   });
 
   addEntryBtn.addEventListener('click', function() {
@@ -411,7 +456,6 @@ function attachEvents() {
 document.addEventListener('DOMContentLoaded', init);
 
 // Hide logo on scroll
-let scrollTimer;
 window.addEventListener('scroll', function() {
   const header = document.querySelector('.app-header');
   if (!header) return;

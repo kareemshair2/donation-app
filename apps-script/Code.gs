@@ -14,15 +14,6 @@ function doGet(e) {
   let result;
   try {
     switch (action) {
-      case 'getCenters':
-        result = getCenters();
-        break;
-      case 'getVolunteers':
-        result = getVolunteers(e.parameter.centerId);
-        break;
-      case 'getDonationTypes':
-        result = getDonationTypes();
-        break;
       case 'getAllData':
         result = getAllData();
         break;
@@ -35,20 +26,9 @@ function doGet(e) {
   return buildResponse(result);
 }
 
-
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    if (data.action === 'addVolunteer') {
-      const sheet = getSheet('Volunteers');
-      const rows = sheet.getDataRange().getValues();
-      const newId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
-      sheet.appendRow([newId, data.name, data.centerId, data.phone || '']);
-      return buildResponse({
-        success: true,
-        volunteer: { id: newId, name: data.name, centerId: data.centerId, phone: data.phone || '' }
-      });
-    }
 
     if (data.action === 'submitBatch' && data.entries) {
       const sheet = getSheet('Submissions');
@@ -68,7 +48,7 @@ function doPost(e) {
             const mime = entry.receiptImage.indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
             const blob = Utilities.newBlob(
               Utilities.base64Decode(rawData), mime,
-              'receipt_' + entry.referenceNumber + '_' + new Date().getTime()
+              'receipt_' + (entry.referenceNumber || 'NA') + '_' + new Date().getTime()
             );
             const file = folder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
@@ -79,18 +59,40 @@ function doPost(e) {
         }
 
         sheet.appendRow([
-          nextId++, timestamp, data.date, data.center,
-          entry.volunteer, imageUrl, entry.referenceNumber || '',
-          entry.value, entry.donationType, ''
+          nextId++, timestamp, data.date, data.campaign || '', data.center,
+          entry.volunteer, entry.phone || '', entry.donationType || '',
+          entry.receiptType || '', entry.receiptDate || '',
+          entry.referenceNumber || '', entry.value || '',
+          imageUrl, entry.statusCode || '', ''
         ]);
       }
 
       return buildResponse({ success: true, message: 'تم حفظ ' + data.entries.length + ' تبرع بنجاح ✓', count: data.entries.length });
     }
+
     return buildResponse({ success: false, error: 'Unknown action' });
   } catch (err) {
     return buildResponse({ success: false, error: err.toString() });
   }
+}
+
+function getAllData() {
+  return {
+    success: true,
+    campaigns: getCampaigns().data,
+    centers: getCenters().data,
+    volunteers: getVolunteersAll().data,
+    donationTypes: getDonationTypes().data,
+    receiptTypes: getReceiptTypes().data
+  };
+}
+
+function getCampaigns() {
+  const sheet = getSheet('Campaigns');
+  if (!sheet) return { success: true, data: [] };
+  const rows = sheet.getDataRange().getValues();
+  rows.shift();
+  return { success: true, data: rows.map(r => ({ id: r[0], name: r[1] })) };
 }
 
 function getCenters() {
@@ -99,13 +101,12 @@ function getCenters() {
   return { success: true, data: rows.map(r => ({ id: r[0], name: r[1], area: r[2] })) };
 }
 
-function getVolunteers(centerId) {
+function getVolunteersAll() {
   const rows = getSheet('Volunteers').getDataRange().getValues();
   rows.shift();
   return {
     success: true,
-    data: rows.filter(r => String(r[2]) === String(centerId))
-      .map(r => ({ id: r[0], name: r[1], centerId: r[2], phone: r[3] }))
+    data: rows.map(r => ({ id: r[0], name: r[1], centerId: r[2], phone: r[3] || '' }))
   };
 }
 
@@ -115,22 +116,12 @@ function getDonationTypes() {
   return { success: true, data: rows.map(r => ({ id: r[0], name: r[1] })) };
 }
 
-function getAllData() {
-  return {
-    success: true,
-    centers: getCenters().data,
-    volunteers: getVolunteersAll().data,
-    donationTypes: getDonationTypes().data
-  };
-}
-
-function getVolunteersAll() {
-  const rows = getSheet('Volunteers').getDataRange().getValues();
+function getReceiptTypes() {
+  const sheet = getSheet('ReceiptTypes');
+  if (!sheet) return { success: true, data: [] };
+  const rows = sheet.getDataRange().getValues();
   rows.shift();
-  return {
-    success: true,
-    data: rows.map(r => ({ id: r[0], name: r[1], centerId: r[2], phone: r[3] }))
-  };
+  return { success: true, data: rows.map(r => ({ id: r[0], name: r[1] })) };
 }
 
 function getOrCreateFolder(name) {
