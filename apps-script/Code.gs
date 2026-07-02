@@ -35,7 +35,7 @@ function doPost(e) {
       const rows = sheet.getDataRange().getValues();
       let nextId = rows.length > 1 ? rows[rows.length - 1][0] + 1 : 1;
       const timestamp = new Date().toISOString();
-      const folder = getOrCreateFolder('DonationReceipts');
+      const parentFolder = getOrCreateFolder('DonationReceipts');
 
       for (let i = 0; i < data.entries.length; i++) {
         const entry = data.entries[i];
@@ -43,14 +43,21 @@ function doPost(e) {
 
         if (entry.receiptImage && entry.receiptImage.length > 50) {
           try {
+            const centerName = (data.center || 'Unknown').replace(/[\/\\:*?"<>|]/g, '_');
+            const centerFolder = getOrCreateSubFolder(parentFolder, centerName);
+
             const parts = entry.receiptImage.split(',');
             const rawData = parts.length > 1 ? parts[1] : parts[0];
             const mime = entry.receiptImage.indexOf('png') > -1 ? 'image/png' : 'image/jpeg';
-            const blob = Utilities.newBlob(
-              Utilities.base64Decode(rawData), mime,
-              'receipt_' + (entry.referenceNumber || 'NA') + '_' + new Date().getTime()
-            );
-            const file = folder.createFile(blob);
+            const ext = entry.receiptImage.indexOf('png') > -1 ? 'png' : 'jpg';
+
+            const ref = (entry.referenceNumber || '').replace(/[\/\\:*?"<>|]/g, '_');
+            const val = (entry.value || '').replace(/[\/\\:*?"<>|]/g, '_');
+            const status = (entry.statusCode || '').replace(/[\/\\:*?"<>|]/g, '_');
+            const fileName = status ? ref + '-' + val + '-' + status + '.' + ext : ref + '-' + val + '.' + ext;
+
+            const blob = Utilities.newBlob(Utilities.base64Decode(rawData), mime, fileName);
+            const file = centerFolder.createFile(blob);
             file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
             imageUrl = file.getUrl();
           } catch (e) {
@@ -128,4 +135,13 @@ function getOrCreateFolder(name) {
   const folders = DriveApp.getFoldersByName(name);
   if (folders.hasNext()) return folders.next();
   return DriveApp.createFolder(name);
+}
+
+function getOrCreateSubFolder(parent, name) {
+  const folders = parent.getFolders();
+  while (folders.hasNext()) {
+    const f = folders.next();
+    if (f.getName() === name) return f;
+  }
+  return parent.createFolder(name);
 }
